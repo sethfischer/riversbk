@@ -1,0 +1,20 @@
+# riversbk push cofiguration template
+
+fabric:
+    user: user
+    key_filename: /home/user/.ssh/id_rsa
+    no_agent: True
+    hosts:
+        - example.com
+
+rsync:
+    src: /
+    rsync_user: user
+    dest: /var/backups/riversbk/staging/host/
+    args:
+        --rsh: "'ssh -i /home/user/.ssh/id_rsa'"
+        --exclude-from: example.exclude
+
+remote:
+    block_device: /dev/sdb
+    rsnapshot_conf: /etc/opt/riversbk/host.rsnapshot.conf

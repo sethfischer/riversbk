@@ -1,0 +1,141 @@
+#!/usr/bin/env python
+"""riversbk push
+
+As rsnapshot does not support push-to-remote this script first uses rsync to
+push to a remote staging area, after which rsnapshot is executed on the remote.
+"""
+
+
+from argparse import ArgumentParser
+from fabric.api import env, execute, local, run, task
+from fabric.network import disconnect_all
+from os import geteuid
+from sys import stderr
+from yaml import safe_load
+
+
+def rsync_staging(src, rsync_user, dest, rsync_args):
+    """Sync remote staging area.
+
+    :param src: source directory
+    :type src: str
+    :param rsync_user: rsync user
+    :type rsync_user: str
+    :param dest: destination directory
+    :type dest: str
+    :param rsync_args: rsync arguments
+    :type rsync_args: dict
+    """
+
+    args_fixed = [
+        '--archive',
+        '--numeric-ids',
+        '--relative',
+        '--delete',
+        '--delete-excluded'
+    ]
+
+    args = ' '.join("%s=%s" % (key, val) for (key, val) in rsync_args.iteritems())
+    command = 'rsync {args_fixed} {args} {src} {rsync_user}@{host}:{dest}'
+
+    local(
+        command.format(
+            args_fixed=' '.join(args_fixed), args=args, src=src,
+            rsync_user=rsync_user, host=env.host, dest=dest))
+
+
+@task
+def push(block_device, src, rsync_user, dest, rsnapshot_conf, rsync_args):
+    """Rsnapshot push to remote luks volume
+
+    Implement an rsnapshot push by first using rsync to push to the remote then
+    running rsnapshot on the remote.
+
+    :param block_device: block device identifier
+    :type block_device: str
+    :param src: source directory
+    :type src: str
+    :param rsync_user: rsync user
+    :type rsync_user: str
+    :param dest: destination directory
+    :type dest: str
+    :param rsnapshot_conf: rsnapshot configuration filename
+    :type rsnapshot_conf: str
+    :param rsync_args: rsync arguments
+    :type rsync_args: dict
+    """
+
+    run('cryptsetup luksOpen {block_device} riversbk'.format(
+        block_device=block_device))
+    run('mount /dev/mapper/riversbk /var/backups/riversbk')
+    rsync_staging(src, rsync_user, dest, rsync_args)
+    run('sync')
+    run('/usr/local/bin/rsnapshot -c {rsnapshot_conf} daily'.format(
+        rsnapshot_conf=rsnapshot_conf))
+    run('sync')
+    run('umount /var/backups/riversbk')
+    run('cryptsetup luksClose riversbk')
+
+
+def parse_config(filename):
+    """
+    Parse configuration file.
+
+    :param filename: YAML configuration filename
+    :type filename: str
+    :returns configuration
+    :rtype dict
+    """
+    try:
+        config_file = open(filename, 'r')
+    except IOError:
+        raise Exception('Unable to open file {filename}'.format(
+            filename=filename))
+    else:
+        config = safe_load(config_file)
+        config_file.close()
+
+    return config
+
+
+def main():
+
+    if not geteuid() == 0:
+        exit('ERROR: This script must be run as root')
+
+    parser = ArgumentParser()
+    parser.add_argument('config', type=str, help='path to riversbk config file')
+    parser.add_argument('-v', '--verbose', help='increase output verbosity',
+                        action='store_true')
+    args = parser.parse_args()
+
+    try:
+        if args.verbose:
+            print 'Parsing configuration file'
+        config = parse_config(args.config)
+    except Exception, err:
+        stderr.write('ERROR: {err}\n'.format(err=err))
+        return 1
+
+    env.update(config['fabric'])
+
+    try:
+        if args.verbose:
+            print 'Starting backup...'
+        execute(push,
+                config['remote']['block_device'],
+                config['rsync']['src'],
+                config['rsync']['rsync_user'],
+                config['rsync']['dest'],
+                config['remote']['rsnapshot_conf'],
+                config['rsync']['args'])
+        return 0
+    except Exception, err:
+        stderr.write('ERROR: {err}\n'.format(err=err))
+        return 1
+    finally:
+        disconnect_all()
+
+
+if __name__ == '__main__':
+    exit(main())
