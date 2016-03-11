@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -e
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 BLOCK_DEVICE" >&2
+    exit 1
+fi
+
+block_device=$1
+
+cryptsetup luksOpen $block_device riversbk
+mount /dev/mapper/riversbk /var/backups/riversbk

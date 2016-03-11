@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -e
+
+sync
+umount /var/backups/riversbk
+cryptsetup luksClose riversbk
