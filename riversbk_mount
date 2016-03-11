@@ -10,4 +10,4 @@ fi
 block_device=$1
 
 cryptsetup luksOpen $block_device riversbk
-mount /dev/mapper/riversbk /var/backups/riversbk
+mount -o ro /dev/mapper/riversbk /var/backups/riversbk
