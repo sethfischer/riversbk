@@ -14,4 +14,3 @@ uninstall:
 	rm $(prefix)/bin/riversbk_push
 	rm $(prefix)/bin/riversbk_mount
 	rm $(prefix)/bin/riversbk_umount
-	rm -r $(prefix)/etc/riversbk
