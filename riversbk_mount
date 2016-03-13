@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -e
+set -o errexit
+set -o nounset
 
 if [ "$#" -ne 1 ]; then
     echo "Usage: $0 BLOCK_DEVICE" >&2

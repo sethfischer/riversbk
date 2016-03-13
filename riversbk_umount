@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -e
+set -o errexit
+set -o nounset
 
 sync
 umount /var/backups/riversbk
